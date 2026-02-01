@@ -13,8 +13,7 @@ from pathlib import Path
 
 
 
-extensions = ['*.csv','*.xl','*.xlsx', '*.xlsm']
-
+extensions = ['*.csv']
 
 
 def swiffer(csv_path):
@@ -255,15 +254,14 @@ def analyzeFiles(path):
 '''        
 
 def main(csv_path):
+    failed = 0
+    failedFiles = []
     if os.path.isdir(csv_path):
-        failed = 0
-        failedFiles = []
         csvFiles = []
         for ext in extensions:
             csvFiles.extend(glob.glob(os.path.join(csv_path, ext)))
         for file in csvFiles:
-            try: 
-                    
+            try:      
                 swiffer(file)
                 newX = swapFileExt(file)
                 print(newX)
@@ -283,9 +281,9 @@ def main(csv_path):
         newX = swapFileExt(csv_path)
         print(newX)
         analyze(newX)
-    print(f'Failed Files:{failed}')
-    print(f'Failed Processing These Files: {failedFiles}')
-
+    if failed > 0: 
+        print(f'Failed Files:{failed}')
+        print(f'Failed Processing These Files: {failedFiles}')
 if __name__=="__main__":
     csv_path = sys.argv[1]
     #opath = sys.argv[2]
