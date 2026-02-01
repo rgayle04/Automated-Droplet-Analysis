@@ -3,8 +3,10 @@ import math
 import pandas as pd 
 import glob
 import numpy as np
+from numpy.polynomial import polynomial as P 
 import scipy.stats as stats
 from collections import defaultdict
+from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LinearRegression
 import sys
 from pathlib import Path
@@ -59,16 +61,16 @@ def analyze(csv_path):
         mean = df['DIB Radius'].mean()
         print('DIB Rad Mean:', mean)
 
-        uL = mean + (std*2) 
+        uL = mean + (std*3) 
         print(f'Upper Limit: {uL}') 
-        lL = mean - (std*2)
+        lL = mean - (std*3)
         print(f'Lower Limit: {lL}')
-        df = df[df['DIB Radius'].notna()]
+        #df = df[df['DIB Radius'].notna()]
 
-        outliers = np.where((df['DIB Radius']> uL) | (df['DIB Radius'] < lL))
+        outliers = np.where((df['DIB Radius'] > uL) | (df['DIB Radius'] < lL) | (df['DIB Radius'].isna()))
 
         print(f'Number of Outliers: {len(outliers[0])}')
-        df = df[(df['DIB Radius'] >= lL) & (df['DIB Radius'] <= uL)]
+        df.drop(outliers[0],axis=0, inplace=True)
         print(f'Rows remaining after cleaning: {len(df)}')
         split_name = name.split(" ")
         sp_name = split_name[-1]
@@ -88,7 +90,7 @@ def analyze(csv_path):
 
         df['Adjusted Time'] = (df['Time Stamp']-df.loc[0, 'Time Stamp'])
 
-        df['DIB Area'] =  math.pi*(df.loc[0,'DIB Radius']**2)
+        df['DIB Area'] =  math.pi*(df['DIB Radius']**2)
         
         av = df.loc[0, 'Droplet 1 Volume']
         
@@ -129,28 +131,52 @@ def analyze(csv_path):
 
         df['3rd Degree Polynomial Section:'] = None
 
-        X_poly = np.vstack([df['Adjusted Time']**1, df['Adjusted Time']**2, df['Adjusted Time']**3]).T
-        model = LinearRegression()
-        model.fit(X_poly, df['DIB Area'])
-        coefficients = model.coef_
-        intercept = model.intercept_
+        x = df['Adjusted Time'].dropna().values
 
-        a = coefficients.tolist() 
+        y = df['DIB Area'].dropna().values
+
+        min_len = min(len(x), len(y))
+
+        x = x[:min_len]
+        y = y[:min_len]
+
+        coeffs = P.polyfit(x,y,3)
+
+
+        #X = np.column_stack([x**1, x**2, x**3])
+
+        #X_with_intercept = np.column_stack([np.ones(len(x)), X])
+
+        #coefficients = np.linalg.lstsq(X_with_intercept, y, rcond=None)[0]
+
+        
+#        coefficients = np.polyfit(x,y,3)
+#        a3, a2, a1, a0 = coefficients
+
+        #a = coefficients.tolist() 
         df['A'] = None
-        df.at[0, 'A'] = a[0]
+        df.at[0, 'A'] = coeffs[3]
         df['B'] = None
-        df.at[0, 'B'] = a[1]
+        df.at[0, 'B'] = coeffs[2]
         df['C'] = None
-        df.at[0, 'C'] = a[2]
+        df.at[0, 'C'] = coeffs[1]
         df['D'] = None
-        df.at[0, 'D'] = intercept 
+        df.at[0, 'D'] = coeffs[0] 
         df['Eval']=((0.018*df.loc[0, 'Org. Concentr']*df.loc[0, 'A']*df['Adjusted Time']**4)/(2*df.loc[0, 'Droplet 1 Volume'])+(2*0.018*df.loc[0, 'Org. Concentr']*df.loc[0, 'B']*df['Adjusted Time']**3)/(3*df.loc[0,'Droplet 1 Volume'])+(0.018*df.loc[0, 'Org. Concentr']*df.loc[0, 'C']*df['Adjusted Time']**2)/df.loc[0,'Droplet 1 Volume']+(2*0.018*df.loc[0, 'Org. Concentr']*df.loc[0, 'D']*df['Adjusted Time'])/df.loc[0,'Droplet 1 Volume'])
 
         
         #df.at[0, 'Permeability'] = ((slope/2)* df.loc[0, 'DIB Radius(cm)'])/(df.loc[0, 'DIB Area(cm^2)']*0.018*(df.loc[0, 'Org. Concentr']))
 
         
-        slope, intercept, r, p ,std_error = stats.linregress(df['Eval'], df['(V/V0)^2'])
+        #slope, intercept, r, p ,std_error = stats.linregress(df['Eval'], df['(V/V0)^2'])
+        
+        x = df['Eval'].values
+        y = df['(V/V0)^2'].values
+        mask = ~np.isnan(x) & ~np.isnan(y)
+        x = x[mask]
+        y = y[mask]
+        
+        slope, intercept = np.polyfit(x,y,1)
         df['Permeability (slope)']= None
         df.at[0, 'Permeability (slope)'] = slope
 
@@ -230,14 +256,25 @@ def analyzeFiles(path):
 
 def main(csv_path):
     if os.path.isdir(csv_path):
+        failed = 0
+        failedFiles = []
         csvFiles = []
         for ext in extensions:
             csvFiles.extend(glob.glob(os.path.join(csv_path, ext)))
         for file in csvFiles:
-            swiffer(file)
-            newX = swapFileExt(file)
-            print(newX)
-            #analyze(newX)
+            try: 
+                    
+                swiffer(file)
+                newX = swapFileExt(file)
+                print(newX)
+                analyze(newX)
+            except Exception as e:
+                failed+=1
+                failedFiles.append(file)
+                print(f"✗ ERROR processing {file}: {str(e)}")
+                print(f"Skipping to next file...\n")
+                continue
+
             
         #analyzeFiles(csv_path)
 
@@ -245,7 +282,9 @@ def main(csv_path):
         swiffer(csv_path)
         newX = swapFileExt(csv_path)
         print(newX)
-        #analyze(newX)
+        analyze(newX)
+    print(f'Failed Files:{failed}')
+    print(f'Failed Processing These Files: {failedFiles}')
 
 if __name__=="__main__":
     csv_path = sys.argv[1]
@@ -253,5 +292,3 @@ if __name__=="__main__":
 
     main(csv_path)
     
-
-
