@@ -16,6 +16,7 @@ from pathlib import Path
 extensions = ['*.csv']
 
 
+
 def swiffer(csv_path):
     #os.makedirs(opath, exist_ok=True)
     print(f'{csv_path}')
@@ -66,11 +67,17 @@ def analyze(csv_path):
         print(f'Lower Limit: {lL}')
         #df = df[df['DIB Radius'].notna()]
 
-        outliers = np.where((df['DIB Radius'] > uL) | (df['DIB Radius'] < lL) | (df['DIB Radius'].isna()))
-
+        outliers = np.where((df['DIB Radius'] > uL) | (df['DIB Radius'] < lL))
+        print(f'Rows before Cleaning: {len(df)}')
         print(f'Number of Outliers: {len(outliers[0])}')
-        df.drop(outliers[0],axis=0, inplace=True)
-        print(f'Rows remaining after cleaning: {len(df)}')
+
+        if len(outliers[0]) < len(df) * 0.5:  # Don't remove more than 50%
+            df.drop(outliers[0], axis=0, inplace=True)
+            df.reset_index(drop=True, inplace=True)  # Reset index after dropping
+            print(f'Rows remaining: {len(df)}')
+        else:
+            print("Too many outliers detected - skipping removal")
+            
         split_name = name.split(" ")
         sp_name = split_name[-1]
 
@@ -116,19 +123,17 @@ def analyze(csv_path):
         df['DIB Area(cm^2)'] = None
         df.at[0, 'DIB Area(cm^2)'] = math.pi*(df.loc[0,'DIB Radius(cm)']**2)
 
-        slope, intercept, r, p, std_error = stats.linregress(df['Adjusted Time'], df['(V/V0)^2'])
-        
-        df['slope (V/V0)^2'] = None
-        df.at[0, 'slope (V/V0)^2'] = slope
+        summary_cols = {
+        'slope (V/V0)^2': slope,
+        'r^2': intercept,
+        'Permeability (avg DIB Rad)': ((slope/2) * df.loc[0, 'DIB Radius(cm)']) / (df.loc[0, 'DIB Area(cm^2)'] * 0.018 * df.loc[0, 'Org. Concentr']) * 2,
+        '3rd Degree Polynomial Section:': None
+        }
 
-        df['r^2'] = None
-        df.at[0, 'r^2'] = intercept
-
-        df['Permeability (avg DIB Rad)'] = None 
-
-        df.at[0, 'Permeability (avg DIB Rad)'] = ((slope/2)* df.loc[0, 'DIB Radius(cm)'])/(df.loc[0, 'DIB Area(cm^2)']*0.018*df.loc[0,'Org. Concentr'])*2
-
-        df['3rd Degree Polynomial Section:'] = None
+        for col, val in summary_cols.items():
+            if col not in df.columns:
+                df[col] = np.nan  # Use NaN instead of None
+            df.at[0, col] = val
 
         x = df['Adjusted Time'].dropna().values
 
@@ -259,7 +264,10 @@ def main(csv_path):
     if os.path.isdir(csv_path):
         csvFiles = []
         for ext in extensions:
+            #if ext == '.xlsx':
+            #    continue
             csvFiles.extend(glob.glob(os.path.join(csv_path, ext)))
+            
         for file in csvFiles:
             try:      
                 swiffer(file)
