@@ -15,7 +15,7 @@ def analyze(csv_path, output_path):
     df = pd.read_csv(csv_path)
     os.makedirs(output_path, exist_ok=True)
     name = Path(csv_path).stem
-    df = pd.read_excel(csv_path)
+    df = pd.read_csv(csv_path)
     #os.makedirs(output_path, exist_ok=True)
     if df.empty:
         return
@@ -145,7 +145,7 @@ def analyze(csv_path, output_path):
         df['Permeability (intercept)'] = None
         df.at[0, 'Permeability (intercept)'] = intercept
 
-        df.to_excel(csv_path, index=False)
+        df.to_csv(csv_path, index=False)
 
         print(f'[DONE] {name} processed. \n')
 def main(csv_path, output_path):
