@@ -40,7 +40,7 @@ def swiffer(csv_path):
     file_path= csv_path.replace('.csv', '.xlsx')
     df.to_csv(csv_path, index=False)
 
-    df.to_excel(file_path, index=False)
+    df.to_csv(file_path, index=False)
     
 
 def swapFileExt(csv_path):
@@ -50,7 +50,7 @@ def swapFileExt(csv_path):
 
 def analyze(csv_path):
     name = Path(csv_path).stem
-    df = pd.read_excel(csv_path)
+    df = pd.read_csv(csv_path, encoding='utf-8')
     #os.makedirs(output_path, exist_ok=True)
     if df.empty:
         return
@@ -181,7 +181,7 @@ def analyze(csv_path):
         df['Permeability (intercept)'] = None
         df.at[0, 'Permeability (intercept)'] = intercept
 
-        df.to_excel(csv_path, index=False)
+        df.to_csv(csv_path, index=False)
 
         print(f'[DONE] {name} processed. \n')
 '''
